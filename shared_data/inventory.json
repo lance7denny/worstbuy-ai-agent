@@ -1,0 +1,6 @@
+{
+  "Glass jug":  {"in_stock": true,  "quantity": 14},
+  "Headphones": {"in_stock": true,  "quantity": 3},
+  "Chair":      {"in_stock": true,  "quantity": 6},
+  "T-shirt":    {"in_stock": false, "quantity": 0}
+}

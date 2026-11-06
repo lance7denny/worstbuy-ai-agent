@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worstbuy Support</title>
+<style>
+  :root {
+    --bg:#eef1f6; --card:#fff; --text:#1b2330; --muted:#6b7686; --line:#dde2ea;
+    --brand:#0a3d91; --brand-text:#fff; --accent:#ffd400; --me:#0a3d91; --me-text:#fff;
+    --bot:#f1f3f7; --ok:#1f8a4c; --warn:#b7791f; --disabled:#a3abb8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#10141b; --card:#1a202b; --text:#e9edf4; --muted:#93a0b3; --line:#2a3342;
+      --brand:#2d5fc4; --me:#2d5fc4; --bot:#262e3c; --ok:#4cc380; --warn:#e0a84a; --disabled:#5d6878; }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system,system-ui,"Segoe UI",sans-serif; display:flex; flex-direction:column; align-items:center; }
+  header { width:100%; flex:none; background:var(--brand); color:var(--brand-text); padding:14px 16px; display:flex; justify-content:center; }
+  .hd { width:100%; max-width:1500px; display:flex; align-items:center; gap:12px; }
+  .logo { font-weight:800; font-size:22px; letter-spacing:-.02em; }
+  .logo span { background:var(--accent); color:#111; padding:0 6px; border-radius:4px; margin-left:2px; }
+  #chatwrap { flex:1 1 560px; min-width:0; min-height:0; display:flex; flex-direction:column; background:var(--card); border-left:1px solid var(--line); border-right:1px solid var(--line); }
+  #log { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .row { display:flex; gap:8px; max-width:100%; }
+  .row.me { justify-content:flex-end; }
+  .avatar { width:28px; height:28px; border-radius:50%; background:var(--brand); color:#fff; font-size:12px; font-weight:700; display:grid; place-items:center; flex:none; }
+  .bubble { padding:9px 13px; border-radius:16px; max-width:80%; white-space:pre-wrap; word-wrap:break-word; }
+  .bot .bubble { background:var(--bot); border-top-left-radius:4px; }
+  .me .bubble { background:var(--me); color:var(--me-text); border-top-right-radius:4px; }
+  .status { color:var(--muted); font-size:13px; padding-left:36px; font-style:italic; }
+  .dots span { display:inline-block; width:6px; height:6px; margin-right:3px; border-radius:50%; background:var(--muted); animation:b 1.2s infinite; }
+  .dots span:nth-child(2){animation-delay:.2s} .dots span:nth-child(3){animation-delay:.4s}
+  @keyframes b { 0%,60%,100%{opacity:.25} 30%{opacity:1} }
+  .menu { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-left:36px; max-width:460px; }
+  @media (max-width:520px){ .menu{grid-template-columns:1fr; margin-left:0} .status{padding-left:0} }
+  .tile { text-align:left; border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--card); color:var(--text); font:inherit; display:flex; gap:10px; align-items:center; }
+  .tile b { display:block; font-size:14px; }
+  .tile small { color:var(--muted); font-size:12px; }
+  .tile .ic { font-size:20px; }
+  .tile.on { cursor:pointer; border-color:var(--brand); }
+  .tile.on:hover { background:var(--bot); }
+  .tile.off { opacity:.45; cursor:not-allowed; filter:grayscale(1); pointer-events:none; color:var(--disabled); }
+  .card { margin-left:36px; border:1.5px solid var(--ok); border-radius:12px; padding:12px 14px; max-width:420px; }
+  .card h4 { margin:0 0 4px; color:var(--ok); font-size:15px; }
+  .card p { margin:2px 0; font-size:13px; }
+  .card .sim { color:var(--warn); font-size:12px; margin-top:6px; }
+  .exec { margin-left:36px; background:var(--warn); color:#111; padding:10px 14px; border-radius:12px; font-weight:600; max-width:420px; }
+  .btn { margin-left:36px; padding:9px 14px; border:0; border-radius:10px; background:var(--brand); color:#fff; font:inherit; font-weight:600; cursor:pointer; align-self:flex-start; }
+  .btn.sec { background:transparent; color:var(--brand); border:1.5px solid var(--brand); }
+  form { display:flex; gap:8px; padding:12px; border-top:1px solid var(--line); align-items:center; }
+  form input[type=text] { flex:1; padding:11px 14px; border-radius:22px; border:1.5px solid var(--line); background:var(--bg); color:var(--text); font:inherit; }
+  form input:focus { outline:2px solid var(--brand); outline-offset:-1px; }
+  form button.send { border:0; border-radius:22px; padding:11px 18px; background:var(--brand); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  form button.clip { border:1.5px solid var(--line); border-radius:50%; width:42px; height:42px; background:var(--card); font-size:18px; cursor:pointer; display:none; }
+  form.photo button.clip { display:block; border-color:var(--brand); animation:pulse 1.6s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(10,61,145,.4)} 100%{box-shadow:0 0 0 10px rgba(10,61,145,0)} }
+  form:has(input:disabled) { opacity:.55; }
+  .foot { font-size:11px; color:var(--muted); text-align:center; padding:6px 0 10px; }
+
+  /* ---------- layout: chat + inspector ---------- */
+  #app { flex:1; width:100%; max-width:1500px; min-height:0; display:flex; gap:0; }
+  #inspector { flex:1 1 520px; min-width:0; min-height:0; display:flex; flex-direction:column; background:var(--bg); border-right:1px solid var(--line); font-size:13px; }
+  .live { width:8px; height:8px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 0 var(--ok); animation:live 2s infinite; }
+  @keyframes live { 0%{box-shadow:0 0 0 0 rgba(31,138,76,.5)} 100%{box-shadow:0 0 0 8px rgba(31,138,76,0)} }
+  .tools { display:flex; gap:6px; flex-wrap:wrap; }
+  .tools button { border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:6px; padding:3px 9px; font:inherit; font-size:12px; cursor:pointer; }
+  .pipe { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; align-items:center; }
+  .pipe .st { font-size:11px; padding:2px 8px; border-radius:99px; border:1px solid var(--line); color:var(--muted); background:var(--bg); transition:all .25s; }
+  .pipe .st.on { color:#fff; border-color:transparent; box-shadow:0 0 0 3px color-mix(in srgb, currentColor 0%, transparent); }
+  .pipe .ar { color:var(--muted); font-size:10px; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:8px 14px; background:var(--card); border-bottom:1px solid var(--line); }
+  .stat { text-align:center; } .stat b { display:block; font-size:16px; } .stat small { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
+  #stateCard { margin:10px 14px 0; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 10px; }
+  #stateCard h3 { cursor:pointer; user-select:none; margin:0 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  #stateCard .why { font-weight:400; text-transform:none; letter-spacing:0; }
+  .kv { display:grid; grid-template-columns:repeat(3,1fr); gap:4px 10px; }
+  .kv div { min-width:0; } .kv small { display:block; color:var(--muted); font-size:10px; } .kv span { font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-word; }
+  .kv span.set { color:var(--ok); } .kv span.nil { color:var(--muted); }
+  #tl { flex:1; overflow-y:auto; padding:10px 14px 24px; }
+  .turn { margin-bottom:14px; }
+  .turn-hd { position:sticky; top:-10px; z-index:2; background:var(--bg); padding:6px 0; font-weight:600; font-size:12px; color:var(--muted); border-bottom:1px dashed var(--line); margin-bottom:8px; }
+  .turn-hd b { color:var(--text); }
+  .ev { position:relative; margin:0 0 6px 18px; }
+  .ev::before { content:""; position:absolute; left:-12px; top:0; bottom:-8px; width:2px; background:var(--line); }
+  .ev:last-child::before { bottom:12px; }
+  .ev .dot { position:absolute; left:-18px; top:9px; width:14px; height:14px; border-radius:50%; border:2px solid var(--bg); background:var(--c); z-index:1; }
+  .ev.running .dot { animation:pulse2 1s infinite; }
+  @keyframes pulse2 { 0%,100%{transform:scale(1)} 50%{transform:scale(1.35)} }
+  .ev .box { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--c); border-radius:8px; padding:7px 10px; cursor:pointer; }
+  .ev.warn .box { background:color-mix(in srgb, var(--warn) 9%, var(--card)); }
+  .ev.error .box { background:color-mix(in srgb, #e53e3e 12%, var(--card)); border-left-color:#e53e3e; }
+  .ev .top { display:flex; gap:8px; align-items:center; }
+  .chip { font-size:10px; font-weight:700; letter-spacing:.05em; color:#fff; background:var(--c); border-radius:4px; padding:1px 6px; flex:none; }
+  .ev .ttl { font-weight:600; flex:1; min-width:0; }
+  .ev .ms { font-size:11px; color:var(--muted); font-family:ui-monospace,Menlo,monospace; flex:none; }
+  .ev .det { color:var(--muted); margin-top:2px; font-size:12px; }
+  .ev .src { margin-top:3px; font-family:ui-monospace,Menlo,monospace; font-size:10.5px; color:var(--muted); opacity:.9; }
+  .ev .body { display:none; margin-top:8px; border-top:1px dashed var(--line); padding-top:8px; }
+  .ev.open .body { display:block; }
+  .spin { display:inline-block; width:10px; height:10px; border:2px solid var(--line); border-top-color:var(--c); border-radius:50%; animation:sp .7s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  pre.json { margin:0; font:11px/1.45 ui-monospace,Menlo,monospace; white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; background:var(--bg); border-radius:6px; padding:6px 8px; }
+  .lab { font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:8px 0 3px; }
+  .lab:first-child { margin-top:0; }
+  .bar { display:flex; align-items:center; gap:8px; margin:3px 0; font-size:12px; }
+  .bar .nm { width:110px; flex:none; } .bar .tr { flex:1; height:8px; background:var(--bg); border-radius:4px; overflow:hidden; } .bar .fl { height:100%; background:var(--c); } .bar .vl { width:70px; font-family:ui-monospace,Menlo,monospace; font-size:11px; text-align:right; }
+  .bar.unused { opacity:.45; }
+  .rule { display:flex; gap:8px; align-items:flex-start; padding:3px 0; font-size:12px; }
+  .rule .ic { width:18px; flex:none; text-align:center; }
+  .rule.fired { font-weight:700; color:var(--bad, #c53030); } .rule.pass { color:var(--muted); } .rule.skip { opacity:.4; }
+  .rule small { display:block; font-weight:400; color:var(--muted); }
+  .cmp { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  table.t { width:100%; border-collapse:collapse; font-size:11.5px; } table.t td, table.t th { border-bottom:1px solid var(--line); padding:3px 6px; text-align:left; vertical-align:top; word-break:break-word; } table.t th { color:var(--muted); font-weight:600; font-size:10px; text-transform:uppercase; }
+  .legend { padding:8px 14px; border-top:1px solid var(--line); background:var(--card); font-size:11px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 12px; }
+  .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; background:var(--c); margin-right:4px; }
+  .legend .mcp { flex-basis:100%; }
+  .empty { color:var(--muted); text-align:center; padding:40px 20px; }
+  body.present #inspector { font-size:15px; }
+  body.present .ev .det { font-size:14px; } body.present .chip { font-size:12px; } body.present .ev .src { font-size:12px; }
+  :root { --k-INPUT:#64748b; --k-ROUTER:#7c3aed; --k-LLM:#2563eb; --k-CODE:#0891b2; --k-RAG:#db2777; --k-TOOL:#16a34a; --k-GUARDRAIL:#d97706; --k-DECISION:#be123c; --k-OUTPUT:#0d9488; --k-ERROR:#e53e3e; }
+
+  .tbox { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+  .tbox h3 { margin:0 0 4px; font-size:14px; } .tbox h3 small { font-weight:400; color:var(--muted); font-size:12px; margin-left:6px; }
+  .tbox p { margin:0 0 8px; color:var(--muted); font-size:12px; }
+  .egrp { margin:10px 0 3px; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .erow { display:flex; gap:8px; align-items:baseline; padding:3px 0; border-bottom:1px solid var(--line); font-size:12px; }
+  .erow .st { width:16px; flex:none; font-weight:700; } .erow.pass .st { color:var(--ok); } .erow.fail .st { color:#e53e3e; }
+  .erow .nm { flex:1; min-width:0; } .erow .ex { color:var(--muted); font-family:ui-monospace,Menlo,monospace; font-size:11px; text-align:right; }
+  .erow.fail { background:color-mix(in srgb,#e53e3e 12%, transparent); }
+  .sumbar { margin:8px 0; padding:6px 10px; border-radius:8px; font-weight:600; background:var(--bg); }
+  .sumbar.ok { color:var(--ok); } .sumbar.bad { color:#e53e3e; } .sumbar .pg { display:block; height:6px; background:var(--line); border-radius:3px; margin-top:5px; overflow:hidden; } .sumbar .pg i { display:block; height:100%; background:var(--ok); }
+  .atk { border-top:1px solid var(--line); padding:8px 0; }
+  .atk .h { display:flex; gap:8px; align-items:center; } .atk .h b { flex:1; }
+  .atk button { border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:6px; padding:3px 9px; font:inherit; font-size:12px; cursor:pointer; }
+  .atk .d { color:var(--muted); font-size:12px; margin:2px 0; } .atk .q { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--muted); }
+  .atk .res { margin-top:6px; font-size:12px; }
+  .badge2 { display:inline-block; padding:1px 8px; border-radius:99px; font-size:11px; font-weight:700; color:#fff; }
+  .badge2.pass { background:var(--ok); } .badge2.fail { background:#e53e3e; } .badge2.run { background:var(--muted); }
+  .case { margin-left:36px; border:1.5px solid var(--warn); border-radius:12px; padding:10px 12px; max-width:440px; font-size:13px; }
+  .case summary { cursor:pointer; font-weight:600; } .case table { width:100%; border-collapse:collapse; margin-top:6px; font-size:12px; } .case td { padding:2px 4px; vertical-align:top; border-bottom:1px solid var(--line); word-break:break-word; } .case td:first-child { color:var(--muted); width:38%; }
+  .quick { margin-left:36px; display:flex; gap:8px; flex-wrap:wrap; }
+
+  #usage { margin:10px 14px 0; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px 10px; }
+  .uhd { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+  .uhd b { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-right:auto; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+  .seg button { border:0; background:var(--bg); color:var(--muted); font:inherit; font-size:11px; padding:2px 8px; cursor:pointer; }
+  .seg button.on { background:var(--brand); color:#fff; }
+  #profile, #cmpModel { border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:6px; font:inherit; font-size:11px; padding:2px 4px; max-width:190px; }
+  #cmpModel { max-width:220px; padding:3px 8px; font-size:12px; }
+  .ugrid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px 10px; }
+  .ugrid div { min-width:0; } .ugrid small { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
+  .ugrid b { font-size:14px; font-family:ui-monospace,Menlo,monospace; } .ugrid i { font-style:normal; color:var(--muted); font-size:10px; display:block; }
+  .ubar { display:flex; height:9px; border-radius:5px; overflow:hidden; margin:8px 0 2px; background:var(--bg); }
+  .ubar span { display:block; height:100%; min-width:2px; }
+  .ubl { display:flex; gap:12px; flex-wrap:wrap; font-size:10.5px; color:var(--muted); } .ubl i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; }
+  .models { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .mc { border:1px solid var(--line); background:var(--bg); border-radius:8px; padding:4px 8px; font-size:11px; line-height:1.35; }
+  .mc b { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; } .mc span { color:var(--muted); display:block; }
+  .use { margin-top:3px; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--k-LLM); }
+  .ev .use.emb { color:var(--k-RAG); }
+  table.t td.num { font-family:ui-monospace,Menlo,monospace; text-align:right; }
+  .cmpm { margin:8px 0; } .cmpm h4 { margin:8px 0 2px; font-size:12px; font-family:ui-monospace,Menlo,monospace; }
+  pre.cmd { margin:6px 0; padding:6px 8px; background:var(--bg); border-radius:6px; font:12px ui-monospace,Menlo,monospace; }
+  .notice { padding:8px 10px; border-radius:8px; background:color-mix(in srgb, var(--warn) 14%, var(--card)); font-size:12px; margin-top:8px; }
+  @media (max-width:1000px) { .ugrid { grid-template-columns:repeat(2,1fr); } }
+
+  /* ================= v3 layout: chat | live trace | usage rail ================= */
+  html, body { height:100%; }
+  body { display:flex; flex-direction:column; align-items:stretch; overflow:hidden; }
+  header { height:56px; padding:0 18px; display:flex; align-items:center; justify-content:flex-start; }
+  .hd { max-width:none; height:100%; gap:0; }
+  .nav { display:flex; height:100%; margin-left:28px; }
+  .nav button { background:transparent; border:0; color:rgba(255,255,255,.72); font:inherit; font-weight:600; padding:0 18px; height:100%; cursor:pointer; border-bottom:3px solid transparent; }
+  .nav button:hover { color:#fff; } .nav button.on { color:#fff; border-bottom-color:var(--accent); }
+  .hdr-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .hdr-right button { background:rgba(255,255,255,.16); color:#fff; border:0; border-radius:8px; padding:7px 12px; font:inherit; font-size:13px; cursor:pointer; }
+  .hdr-right button:hover { background:rgba(255,255,255,.26); }
+  #railBtn { display:none; }
+
+  #app { max-width:none; width:100%; flex:1; min-height:0; display:grid; grid-template-columns:minmax(340px,27%) minmax(0,1fr) minmax(330px,26%); }
+  #chatwrap { flex:none; min-width:0; min-height:0; border-left:0; border-right:1px solid var(--line); }
+  .colhd { display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line); flex:none; }
+  .colhd b { font-size:14px; } .colhd span { color:var(--muted); font-size:12px; }
+  .colhd button { margin-left:auto; border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:8px; padding:4px 10px; font:inherit; font-size:12px; cursor:pointer; }
+  #trace { min-width:0; min-height:0; display:flex; flex-direction:column; background:var(--bg); }
+  #view-live, #view-tests, #view-faq { display:none; flex:1; min-height:0; }
+  body[data-view="live"] #view-live { display:flex; flex-direction:column; }
+  body[data-view="tests"] #view-tests, body[data-view="faq"] #view-faq { display:block; overflow-y:auto; }
+  body:not([data-view="live"]) #rail { display:none; }
+  body:not([data-view="live"]) #trace { grid-column:2 / span 2; }
+  .page { max-width:1040px; margin:0 auto; padding:22px 24px 48px; }
+  .page h1 { margin:0 0 4px; font-size:22px; } .page .lead { color:var(--muted); margin:0 0 18px; }
+
+  .trace-hd { flex:none; padding:14px 20px 12px; background:var(--card); border-bottom:1px solid var(--line); }
+  .trace-title { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .trace-title b { font-size:16px; } .trace-title .sub { color:var(--muted); font-size:13px; }
+  .trace-title .tools { margin-left:auto; }
+  .tools button { padding:4px 10px; border-radius:8px; }
+  .pipe { margin-top:10px; gap:6px; }
+  .pipe .st { font-size:12px; padding:3px 10px; }
+  .pipe .st .n { font-weight:700; }
+  .kpi { display:none; margin-top:12px; }
+  .kpi div { background:var(--bg); border-radius:10px; padding:6px 10px; } .kpi small { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.04em; } .kpi b { font:700 16px ui-monospace,Menlo,monospace; }
+  #tl { flex:1; min-height:0; overflow-y:auto; padding:16px 20px 32px; }
+  .ev .ttl { font-size:14px; } .ev .det { font-size:12.5px; }
+  .turn-hd { top:-16px; padding:8px 0; background:var(--bg); }
+
+  #rail { min-width:0; min-height:0; overflow-y:auto; border-left:1px solid var(--line); background:var(--bg); padding:16px; display:flex; flex-direction:column; gap:14px; }
+  .rcard { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .rcard h3 { margin:0 0 12px; font-size:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .rcard h3 small { font-weight:400; color:var(--muted); font-size:11.5px; }
+  #usage { margin:0; padding:14px 16px; } #stateCard { margin:0; padding:14px 16px; } #stateCard h3 { cursor:default; text-transform:none; letter-spacing:0; color:var(--text); font-size:14px; margin:0 0 12px; }
+  .uhd { margin-bottom:12px; } .uhd b { font-size:14px; text-transform:none; letter-spacing:0; color:var(--text); }
+  .hero { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+  .hero div { background:var(--bg); border-radius:10px; padding:8px 10px; min-width:0; }
+  .hero small { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
+  .hero b { display:block; font:700 20px/1.25 ui-monospace,Menlo,monospace; } .hero i { font-style:normal; display:block; color:var(--muted); font-size:10.5px; }
+  .ugrid { grid-template-columns:1fr 1fr; gap:8px 14px; margin-top:4px; }
+  .ugrid b { font-size:13px; }
+  .models { margin-top:12px; flex-direction:column; gap:6px; }
+  .mc { padding:7px 10px; }
+  .kv { grid-template-columns:1fr 1fr; gap:8px 14px; }
+  .kv small { font-size:10.5px; } .kv span { font-size:12.5px; }
+  #stats { margin:0; padding:12px 16px; display:grid; grid-template-columns:repeat(4,1fr); gap:6px; border:1px solid var(--line); border-radius:14px; background:var(--card); }
+
+  body.present { font-size:17px; } body.present .ev .det { font-size:15px; } body.present .ev .ttl { font-size:16px; } body.present .chip { font-size:12px; }
+  body.present .hero b { font-size:26px; } body.present .kv span, body.present .ugrid b { font-size:15px; }
+
+  @media (max-width:1279px) {
+    #app { grid-template-columns:minmax(320px,40%) minmax(0,1fr); }
+    #railBtn { display:inline-block; }
+    #rail { position:fixed; top:56px; right:0; bottom:0; width:min(390px,92vw); z-index:30; box-shadow:-10px 0 28px rgba(0,0,0,.35); transform:translateX(106%); transition:transform .2s; border-left:1px solid var(--line); }
+    body.rail-open #rail { transform:none; }
+    body:not([data-view="live"]) #rail { display:none; }
+    body:not([data-view="live"]) #trace { grid-column:2; }
+    .kpi { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  }
+  @media (max-width:899px) {
+    body { overflow:auto; } #app { display:flex; flex-direction:column; overflow:visible; }
+    #chatwrap { height:82vh; flex:none; border-right:0; } #trace { height:88vh; flex:none; border-top:2px solid var(--line); }
+    .nav { margin-left:10px; } .nav button { padding:0 10px; } .hdr-right span { display:none; } .kpi { grid-template-columns:repeat(2,1fr); }
+  }
+  /* FAQ */
+  .faq-search { width:100%; padding:11px 14px; border:1.5px solid var(--line); border-radius:12px; background:var(--card); color:var(--text); font:inherit; margin-bottom:16px; }
+  .faq-search:focus { outline:2px solid var(--brand); outline-offset:-1px; }
+  .faq-diagram { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:22px; }
+  .faq-diagram svg { width:100%; height:auto; display:block; }
+  .faq-diagram svg text { font-family:-apple-system,system-ui,sans-serif; fill:var(--text); }
+  .faq-diagram .box { fill:var(--card); stroke-width:2; } .faq-diagram .grp { fill:color-mix(in srgb, var(--muted) 7%, transparent); stroke:var(--line); stroke-width:1.5; stroke-dasharray:5 4; }
+  .faq-diagram .ar { stroke:var(--muted); stroke-width:1.8; fill:none; marker-end:url(#ah); } .faq-diagram .ar.dash { stroke-dasharray:5 4; }
+  .faq-diagram .t1 { font-size:13px; font-weight:700; } .faq-diagram .t2 { font-size:11px; fill:var(--muted); }
+  .faq-grp { margin:26px 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); font-weight:700; }
+  details.q { background:var(--card); border:1px solid var(--line); border-radius:12px; margin-bottom:8px; }
+  details.q summary { cursor:pointer; padding:12px 16px; font-weight:600; list-style:none; display:flex; gap:10px; align-items:center; }
+  details.q summary::-webkit-details-marker { display:none; } details.q summary::before { content:"+"; color:var(--brand); font-weight:700; width:14px; flex:none; }
+  details.q[open] summary::before { content:"–"; }
+  details.q .a { padding:0 16px 14px 40px; color:var(--text); font-size:14px; } details.q .a p { margin:0 0 8px; } details.q .a ul, details.q .a ol { margin:4px 0 8px; padding-left:20px; } details.q .a li { margin:2px 0; }
+  details.q .a code, .faq-note code { background:var(--bg); padding:1px 6px; border-radius:5px; font:12.5px ui-monospace,Menlo,monospace; }
+  details.q .a table { border-collapse:collapse; width:100%; font-size:13px; margin:6px 0; } details.q .a td, details.q .a th { border-bottom:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top; } details.q .a th { color:var(--muted); font-size:11px; text-transform:uppercase; }
+  .faq-note { border-left:4px solid var(--warn); background:color-mix(in srgb, var(--warn) 10%, var(--card)); padding:8px 12px; border-radius:6px; margin:8px 0; font-size:13px; }
+  .faq-none { color:var(--muted); text-align:center; padding:30px; }
+  .k { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.05em; color:#fff; border-radius:4px; padding:1px 6px; background:var(--c); }
+</style>
+</head>
+<body data-view="live">
+<header><div class="hd">
+  <div class="logo">Worst<span>buy</span></div>
+  <nav class="nav" id="nav" aria-label="Views"><button data-v="live" class="on">● Live trace</button><button data-v="tests">Tests</button><button data-v="faq">FAQ</button></nav>
+  <div class="hdr-right">
+    <button id="railBtn" type="button">Usage &amp; state</button>
+    <button id="bPresent" type="button" title="Larger text for projecting">Presenter mode</button>
+    <button id="exportAudit" type="button" title="Download the full trace of this chat as JSON">⬇ <span>Audit log</span></button>
+  </div>
+</div></header>
+<div id="app">
+
+<section id="chatwrap" aria-label="Customer chat">
+  <div class="colhd"><b>Customer chat</b><span>what the customer sees</span><button id="newChat" type="button">New chat</button></div>
+  <div id="log" aria-live="polite"></div>
+  <form id="form" autocomplete="off">
+    <input type="file" id="file" accept="image/*" hidden>
+    <button type="button" class="clip" id="clip" title="Upload photo" aria-label="Upload photo">📎</button>
+    <input type="text" id="input" placeholder="Type a message… (try “Hi”)" maxlength="1000">
+    <button class="send" type="submit">Send</button>
+  </form>
+  <div class="foot">Demo store · simulation only — no real refunds are processed</div>
+</section>
+
+<section id="trace" aria-label="Backend trace">
+
+  <div id="view-live">
+    <div class="trace-hd">
+      <div class="trace-title"><span class="live"></span><b>Backend trace</b><span class="sub">what the system does for each message, live</span>
+        <div class="tools"><button id="bExpand">Expand all</button><button id="bCollapse">Collapse all</button><button id="bClear">Clear</button></div></div>
+      <div class="pipe" id="pipe"></div>
+      <div class="kpi" id="kpi"></div>
+    </div>
+    <div id="tl"><div class="empty">Send a message in the chat. Each backend step will appear here as it happens.</div></div>
+  </div>
+
+  <div id="view-tests"><div class="page">
+    <h1>Tests</h1><p class="lead">Prove the agent still behaves: evals check the decision rules, attack demos try to talk the agent into things, and the comparison runs the same cases on two models.</p>
+    <div id="tests">
+    <section class="tbox">
+      <h3>Evals <small>is the decision layer still correct?</small></h3>
+      <p>Deterministic rule cases need no LLM and run in seconds: the Stage 6 golden cases (checked against both the workshop function and the Worstbuy rules), the entitlement rules, tone and usage accounting. Router cases measure the LLM's intent accuracy. The full suite adds scripted end-to-end chats (slow).</p>
+      <div class="tools"><button id="runFast">Run evals (fast)</button><button id="runFull">Run full suite (slow)</button></div>
+      <div id="evSummary"></div><div id="evList"></div>
+    </section>
+    <section class="tbox">
+      <h3>Attack demos <small>can the agent be talked into it?</small></h3>
+      <p>Each attack runs in a throwaway chat. Code then checks that the attacker did <b>not</b> reach their goal and names the control that stopped it. The full trace appears under <b>Live trace</b>.</p>
+      <div class="tools"><button id="runAllAtk">Run all attacks</button></div>
+      <div id="atkList"></div>
+    </section>
+    <section class="tbox">
+      <h3>Model comparison <small>same scenarios, two models</small></h3>
+      <p>Runs 4 conversations and 8 router cases on <b id="cmpA">the chat model</b> and a second model, after a warm-up so load time doesn't skew the numbers. It takes a few minutes. Nothing is downloaded automatically.</p>
+      <div class="tools"><input id="cmpModel" value="qwen3:1.7b" list="cmpList" aria-label="Second model"><datalist id="cmpList"></datalist><button id="runCmp">Run comparison</button></div>
+      <div id="cmpOut"></div>
+    </section>
+    </div>
+  </div></div>
+
+  <div id="view-faq"><div class="page" id="faqPage"></div></div>
+
+</section>
+
+<aside id="rail" aria-label="Usage and state">
+  <div id="usage" class="rcard">
+    <div class="uhd"><b>Usage &amp; cost</b>
+      <span class="seg"><button data-s="turn" class="on">This turn</button><button data-s="session">Whole chat</button></span>
+      <select id="profile" title="Which hosted price table to estimate against"></select></div>
+    <div class="hero" id="uhero"></div>
+    <div class="ugrid" id="ugrid"></div>
+    <div class="ubar" id="ubar"></div>
+    <div class="ubl"><span><i style="background:var(--k-LLM)"></i>LLM</span><span><i style="background:var(--k-RAG)"></i>RAG / embeddings</span><span><i style="background:var(--k-TOOL)"></i>code &amp; tools</span></div>
+    <div class="models" id="models"></div>
+  </div>
+  <div id="stateCard" class="rcard"><h3>Orchestrator state <small>owned by code; the LLM can’t edit it</small></h3><div class="kv" id="kv"></div></div>
+  <div id="stats"></div>
+</aside>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const log = $("log"), input = $("input"), form = $("form");
+let session = null, busy = false, statusEl = null, typingEl = null;
+
+const MENU = [
+  {ic:"💸", t:"Refund", d:"Damaged, missing or wrong item", on:true, say:"I need a refund"},
+  {ic:"📦", t:"Track my order", d:"Coming soon"},
+  {ic:"🧾", t:"Order details", d:"Coming soon"},
+  {ic:"🔄", t:"Replacement / exchange", d:"Damaged, wrong or lost item", on:true, say:"I need a replacement"},
+  {ic:"🎧", t:"Talk to support", d:"Connect to an executive", on:true, say:"I want to talk to a person"},
+];
+
+function scroll(){ log.scrollTop = log.scrollHeight; }
+function el(html, cls){ const d = document.createElement("div"); if (cls) d.className = cls; d.innerHTML = html; log.appendChild(d); scroll(); return d; }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function bot(text){ el(`<div class="avatar">W</div><div class="bubble">${esc(text)}</div>`, "row bot"); }
+function me(text){ el(`<div class="bubble">${esc(text)}</div>`, "row me"); }
+
+function showTyping(){ hideTyping(); typingEl = el(`<div class="avatar">W</div><div class="bubble dots"><span></span><span></span><span></span></div>`, "row bot"); }
+function hideTyping(){ if (typingEl){ typingEl.remove(); typingEl = null; } }
+function setStatus(t){ if (!statusEl) statusEl = el("", "status"); statusEl.textContent = t; scroll(); }
+function clearStatus(){ if (statusEl){ statusEl.remove(); statusEl = null; } }
+
+function menu(){
+  const m = el("", "menu");
+  MENU.forEach(o => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tile " + (o.on ? "on" : "off");
+    b.innerHTML = `<span class="ic">${o.ic}</span><span><b>${o.t}</b><small>${o.d}</small></span>`;
+    if (o.on) b.onclick = () => send(o.say);
+    else { b.disabled = true; b.setAttribute("aria-disabled", "true"); }
+    m.appendChild(b);
+  });
+  scroll();
+}
+
+function lock(on, ph){ input.disabled = on; form.querySelector(".send").disabled = on; if (ph) input.placeholder = ph; }
+function photoMode(on){ form.classList.toggle("photo", on); }
+
+
+/* ================= Agent Inspector ================= */
+const KINDS = {
+  INPUT:["📥","Input"], ROUTER:["🧭","Routing"], LLM:["🧠","LLM"], CODE:["⚙️","Code check"],
+  RAG:["🔎","RAG"], TOOL:["🛠️","Tool"], GUARDRAIL:["🛡️","Guardrail"], DECISION:["⚖️","Decision"],
+  OUTPUT:["💬","Output"], ERROR:["⚠️","Error"],
+};
+const PIPE = ["INPUT","ROUTER","LLM","CODE","RAG","TOOL","GUARDRAIL","DECISION","OUTPUT"];
+const tl = $("tl"), evs = {}, turns = {};
+let counts = {};
+let curTurn = 0;
+
+(function initStatic(){
+  $("pipe").innerHTML = PIPE.map((k,i) => `<span class="st" data-k="${k}">${KINDS[k][0]} ${KINDS[k][1]}<span class="n"></span></span>${i<PIPE.length-1?'<span class="ar">›</span>':''}`).join("");
+})();
+
+function renderStats(){
+  const c = counts;
+  const cells = [["LLM steps",c.LLM||0],["Tool calls",c.TOOL||0],["RAG searches",c.RAG||0],["Guardrails",c.GUARDRAIL||0]];
+  $("stats").innerHTML = cells.map(([l,v]) => `<div class="stat"><b>${v}</b><small>${l}</small></div>`).join("");
+}
+renderStats();
+
+const pipeN = {};
+function lightPipe(kind){
+  pipeN[kind] = (pipeN[kind] || 0) + 1;
+  const n = document.querySelector(`.pipe .st[data-k="${kind}"]`);
+  if (n){ n.classList.add("on"); n.style.background = `var(--k-${kind})`; n.querySelector(".n").textContent = pipeN[kind] > 1 ? " ×" + pipeN[kind] : ""; }
+}
+function resetPipe(){ Object.keys(pipeN).forEach(k => delete pipeN[k]); document.querySelectorAll(".pipe .st").forEach(n => { n.classList.remove("on"); n.style.background = ""; n.querySelector(".n").textContent = ""; }); }
+
+function fmt(v){ return typeof v === "string" ? v : JSON.stringify(v, null, 2); }
+function jsonBlock(label, v){ return `<div class="lab">${label}</div><pre class="json">${esc(fmt(v))}</pre>`; }
+
+const UKEYS = ["model","kind","prompt_tokens","output_tokens","wall_ms","model_ms","load_ms","prompt_ms","gen_ms","tokens_per_s"];
+function estCost(d, p){
+  if (!p) return 0;
+  return d.kind === "embed" ? (d.prompt_tokens||0) * (p.embed_per_mtok||0) / 1e6
+    : ((d.prompt_tokens||0) * (p.input_per_mtok||0) + (d.output_tokens||0) * (p.output_per_mtok||0)) / 1e6;
+}
+const money = v => v === 0 ? "$0.00" : v < 0.0001 ? "<$0.0001" : "$" + v.toFixed(v < 0.01 ? 5 : 4);
+function usageTable(d){
+  const p = curProfile();
+  const rows = [["Model", d.model + (d.kind === "embed" ? "  (embedding)" : "")],["Prompt tokens", d.prompt_tokens],
+    ["Output tokens", d.kind === "embed" ? "—" : d.output_tokens],["Total time", (d.wall_ms/1000).toFixed(2) + " s"],
+    ["…model load", d.load_ms + " ms"],["…prompt processing", d.prompt_ms + " ms"],["…generation", d.gen_ms + " ms"],
+    ["Speed", d.tokens_per_s ? d.tokens_per_s + " tokens/s" : "—"],
+    ["Actual cost", "$0.00  (local)"],["Est. if hosted" + (p ? " (" + p.label + ")" : ""), money(estCost(d, p))]];
+  return `<div class="lab">Usage for this call</div><table class="t">${rows.map(([k,v]) => `<tr><td>${esc(k)}</td><td class="num">${esc(v)}</td></tr>`).join("")}</table>`;
+}
+
+function renderBody(d){
+  if (!d) return "";
+  let h = "", rest = {...d};
+  if (d.model && d.wall_ms !== undefined){ h += usageTable(d); UKEYS.forEach(k => delete rest[k]); }
+  if (d.ranking){
+    h += `<div class="lab">Cosine similarity (higher = more relevant)</div>` + d.ranking.map(r =>
+      `<div class="bar ${r.used?"":"unused"}"><span class="nm">${esc(r.section)}</span><span class="tr"><span class="fl" style="width:${Math.max(2,Math.round(r.similarity*100))}%"></span></span><span class="vl">${r.similarity}${r.used?" ✓":""}</span></div>`).join("");
+    delete rest.ranking;
+  }
+  if (d.retrieved_text){ h += jsonBlock("Policy text handed to the model", d.retrieved_text.join("\n\n")); delete rest.retrieved_text; }
+  if (d.rules_evaluated){
+    let fired = false;
+    h += `<div class="lab">Rules, evaluated top to bottom (first that fires wins)</div>` + d.rules_evaluated.map(r => {
+      const cls = r.fired ? "fired" : "pass";
+      return `<div class="rule ${cls}"><span class="ic">${r.fired?"⛔":"✓"}</span><span>${esc(r.rule)}<small>${esc(r.detail)}${r.fired?" → this rule decided":""}</small></span></div>`;
+    }).join("") + `<div class="rule skip"><span class="ic">…</span><span>Remaining rules are skipped once one fires</span></div>`;
+    delete rest.rules_evaluated;
+  }
+  if (d.checks){
+    h += `<div class="lab">Model said vs what code accepted</div><table class="t"><tr><th>Field</th><th>Model said</th><th>Code accepted</th></tr>` +
+      d.checks.map(c => `<tr><td>${esc(c.field)}</td><td>${esc(c.model_said===undefined?"—":fmt(c.model_said))}</td><td><b>${esc(fmt(c.accepted!==undefined?c.accepted:(c.keyword_confirmed!==undefined?c.keyword_confirmed:"—")))}</b>${c.note?`<br><small>${esc(c.note)}</small>`:""}</td></tr>`).join("") + `</table>`;
+    delete rest.checks;
+  }
+  if (d.model_args && d.safe_args){
+    h += `<div class="cmp"><div><div class="lab">Model asked for</div><pre class="json">${esc(fmt(d.model_args))}</pre></div><div><div class="lab">Code used instead</div><pre class="json">${esc(fmt(d.safe_args))}</pre></div></div>`;
+    delete rest.model_args; delete rest.safe_args;
+  }
+  if (d.model_supplied !== undefined && d.trusted_from_order !== undefined){
+    h += `<div class="cmp"><div><div class="lab">Model supplied</div><pre class="json">${esc(d.model_supplied)}</pre></div><div><div class="lab">Trusted (from verified order)</div><pre class="json">${esc(d.trusted_from_order)}</pre></div></div>`;
+    delete rest.model_supplied; delete rest.trusted_from_order;
+  }
+  if (Object.keys(rest).length) h += jsonBlock("Details", rest);
+  return h;
+}
+
+function turnBox(n, label){
+  if (turns[n]) return turns[n];
+  const box = document.createElement("div"); box.className = "turn";
+  box.innerHTML = `<div class="turn-hd">${typeof n === "string" ? esc(n) : "Turn " + n} <b></b></div><div class="evs"></div>`;
+  const empty = tl.querySelector(".empty"); if (empty) empty.remove();
+  tl.appendChild(box); turns[n] = box; return box;
+}
+
+function trace(e){
+  if (e.phase === "start" || e.phase === "point"){
+    if (e.turn !== curTurn){ curTurn = e.turn; resetPipe(); counts = {}; renderStats(); }
+    const box = turnBox(e.turn);
+    if (e.kind === "INPUT") box.querySelector(".turn-hd b").textContent = "· " + (e.detail || "");
+    const d = document.createElement("div");
+    d.className = "ev " + (e.status === "running" ? "running" : (e.status === "warn" ? "warn" : e.status === "error" ? "error" : ""));
+    d.style.setProperty("--c", `var(--k-${e.kind})`);
+    d.innerHTML = `<span class="dot"></span><div class="box"><div class="top"><span class="chip">${KINDS[e.kind]?KINDS[e.kind][0]+" "+KINDS[e.kind][1].toUpperCase():e.kind}</span><span class="ttl"></span><span class="ms">${e.phase==="start"?'<span class="spin"></span>':(e.ms!=null?e.ms+" ms":"")}</span></div><div class="det"></div><div class="src"></div><div class="body"></div></div>`;
+    d.querySelector(".ttl").textContent = e.title;
+    d.querySelector(".det").textContent = e.detail || "";
+    d.querySelector(".src").textContent = e.src ? "↳ " + e.src : "";
+    d.querySelector(".body").innerHTML = renderBody(e.data);
+    d.querySelector(".box").onclick = () => d.classList.toggle("open");
+    box.querySelector(".evs").appendChild(d);
+    evs[e.id] = {el:d, kind:e.kind, turn:e.turn};
+    counts[e.kind] = (counts[e.kind]||0) + (e.phase==="start"||e.phase==="point" ? 1 : 0);
+    lightPipe(e.kind);
+    if (e.phase === "point" && e.ms) counts.ms = (counts.ms||0) + e.ms;
+  } else if (e.phase === "end"){
+    const r = evs[e.id]; if (!r) return;
+    const d = r.el;
+    d.classList.remove("running");
+    if (e.status === "warn") d.classList.add("warn"); if (e.status === "error") d.classList.add("error");
+    d.querySelector(".ms").textContent = (e.ms != null ? e.ms + " ms" : "");
+    if (e.detail) d.querySelector(".det").textContent = e.detail;
+    if (e.data && e.data.model && e.data.wall_ms !== undefined){
+      const u = document.createElement("div"); u.className = "use" + (e.data.kind === "embed" ? " emb" : "");
+      const p = curProfile();
+      u.textContent = `${e.data.model} · ${e.data.prompt_tokens}${e.data.kind === "embed" ? "" : "→" + e.data.output_tokens} tok · ${(e.data.wall_ms/1000).toFixed(1)}s · est ${money(estCost(e.data, p))}`;
+      d.querySelector(".src").before(u);
+    }
+    if (e.data){
+      const body = d.querySelector(".body");
+      body.innerHTML = renderBody(e.data) + body.innerHTML;
+      if (e.data.prompt_tokens) counts.tokens = (counts.tokens||0) + (e.data.prompt_tokens||0) + (e.data.output_tokens||0);
+    }
+    counts.ms = (counts.ms||0) + (e.ms||0);
+  }
+  renderStats();
+  tl.scrollTop = tl.scrollHeight;
+}
+
+function setState(st){
+  const rows = [["phase",st.phase],["order",st.order_id],["customer",st.customer_id],["item",st.item],["paid",st.amount_paid!=null?"$"+st.amount_paid:null],
+    ["claim type",st.claim_type],["eligible",st.eligible],["resolution",st.resolution],["photo",st.photo_supplied?"yes":"no"],
+    ["policy checked",st.policy_searched?"yes":"no"],["history checked",st.history_checked?"yes":"no"],["decision",st.decision],["bad IDs",st.order_lookup_failures]];
+  $("kv").innerHTML = rows.map(([k,v]) => `<div><small>${k}</small><span class="${v==null||v==="no"?"nil":"set"}">${v==null?"—":esc(v)}</span></div>`).join("");
+}
+setState({});
+
+function resetInspector(){
+  tl.innerHTML = '<div class="empty">Send a message in the chat. Each backend step will appear here as it happens.</div>';
+  Object.keys(evs).forEach(k => delete evs[k]); Object.keys(turns).forEach(k => delete turns[k]);
+  counts = {}; curTurn = 0; renderStats(); resetPipe(); setState({});
+}
+$("bClear").onclick = resetInspector;
+$("bExpand").onclick = () => document.querySelectorAll(".ev").forEach(n => n.classList.add("open"));
+$("bCollapse").onclick = () => document.querySelectorAll(".ev").forEach(n => n.classList.remove("open"));
+$("bPresent").onclick = () => { document.body.classList.toggle("present"); $("bPresent").textContent = document.body.classList.contains("present") ? "Normal size" : "Presenter mode"; };
+$("railBtn").onclick = () => document.body.classList.toggle("rail-open");
+$("newChat").onclick = () => start();
+
+function caseCard(c){
+  const rows = [["Why", c.escalation_reason],["Flow", c.flow],["Order", c.order_id],["Customer", c.customer_id],["Item", c.item],
+    ["Paid", c.amount_paid != null ? "$" + c.amount_paid : null],["Claim type", c.claim_type],["Customer said", c.customer_said],
+    ["Requested", c.requested_amount != null ? "$" + c.requested_amount : null],["Photo", c.photo_supplied ? "yes" : "no"],
+    ["Checks run", Object.entries(c.checks_run || {}).filter(([,v]) => v).map(([k]) => k.replace("_"," ")).join(", ") || "none"],
+    ["System decision", c.system_decision ? c.system_decision.decision + " — " + c.system_decision.reason : "none yet"]]
+    .filter(r => r[1] != null && r[1] !== "");
+  el(`<details class="case"><summary>📋 What the executive will see</summary><table>${rows.map(([k,v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table></details>`);
+}
+
+/* ---------- views (Live trace | Tests | FAQ), audit export ---------- */
+function showView(v){
+  document.body.dataset.view = v; document.body.classList.remove("rail-open");
+  document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x.dataset.v === v));
+  if (v === "faq") buildFaq();
+}
+document.querySelectorAll("#nav button").forEach(b => b.onclick = () => showView(b.dataset.v));
+const showTab = t => showView(t === "tl" ? "live" : t);
+$("exportAudit").onclick = () => {
+  if (!session) return;
+  const a = document.createElement("a"); a.href = "/api/audit?session=" + session; a.click();
+};
+
+/* ---------- evals ---------- */
+let evalRun = 0, evalGroup = null, evalTotals = {p:0, f:0};
+function evalEvent(e){
+  const list = $("evList"), sum = $("evSummary");
+  if (e.type === "eval_start"){
+    list.innerHTML = ""; evalGroup = null; evalTotals = {p:0, f:0};
+    sum.innerHTML = `<div class="sumbar">Running ${esc(e.suite)} suite…</div>`; return;
+  }
+  if (e.type === "eval"){
+    if (e.group !== evalGroup){ evalGroup = e.group; const g = document.createElement("div"); g.className = "egrp"; g.textContent = e.group; list.appendChild(g); }
+    e.status === "pass" ? evalTotals.p++ : evalTotals.f++;
+    const r = document.createElement("div"); r.className = "erow " + e.status;
+    r.innerHTML = `<span class="st">${e.status === "pass" ? "✓" : "✗"}</span><span class="nm">${esc(e.name)}</span><span class="ex">${esc(e.status === "pass" ? e.actual : "expected " + e.expected + " · got " + e.actual)} · ${e.ms}ms</span>`;
+    list.appendChild(r);
+    sum.innerHTML = `<div class="sumbar">${evalTotals.p + evalTotals.f} run · ${evalTotals.p} passed${evalTotals.f ? " · " + evalTotals.f + " failed" : ""}…</div>`;
+    return;
+  }
+  if (e.type === "eval_done"){
+    const ok = e.failed === 0;
+    sum.innerHTML = `<div class="sumbar ${ok ? "ok" : "bad"}">${ok ? "✓ All" : "✗ " + e.failed + " failed —"} ${e.passed}/${e.total} passed in ${(e.ms/1000).toFixed(1)}s<span class="pg"><i style="width:${Math.round(100*e.passed/Math.max(1,e.total))}%"></i></span></div>`;
+  }
+}
+async function runEvals(suite){
+  $("runFast").disabled = $("runFull").disabled = true;
+  $("evSummary").innerHTML = `<div class="sumbar">Starting…</div>`;
+  try { await stream(await fetch("/api/evals", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({suite})})); }
+  catch { $("evSummary").innerHTML = `<div class="sumbar bad">Could not reach the server.</div>`; }
+  $("runFast").disabled = $("runFull").disabled = false;
+}
+$("runFast").onclick = () => runEvals("fast");
+$("runFull").onclick = () => runEvals("full");
+
+/* ---------- attack demos ---------- */
+let attacks = [], atkBusy = false;
+async function loadAttacks(){
+  attacks = await (await fetch("/api/attacks")).json();
+  $("atkList").innerHTML = attacks.map(a => `<div class="atk" id="atk-${a.id}">
+    <div class="h"><b>${esc(a.title)}</b><button data-id="${a.id}">Run</button></div>
+    <div class="d">${esc(a.description)} <i>Attacker’s goal: ${esc(a.goal)}.</i></div>
+    <div class="q">“${esc(a.turns[0])}”</div><div class="res"></div></div>`).join("");
+  document.querySelectorAll("#atkList button").forEach(b => b.onclick = () => runAttack(b.dataset.id));
+}
+function attackResult(r){
+  const box = document.querySelector(`#atk-${r.id} .res`); if (!box) return;
+  box.innerHTML = `<span class="badge2 ${r.status}">${r.status === "pass" ? "BLOCKED — attack failed" : "ATTACK SUCCEEDED"}</span>
+    <div><b>Outcome:</b> ${esc(r.decision)}</div><div><b>Stopped by:</b> ${esc(r.stopped_by)}</div>
+    <div><b>Bot said:</b> ${esc(r.assistant_said)}</div>
+    <div><a href="#" data-turn="1" class="vt">View trace in Timeline →</a></div>`;
+  box.querySelector(".vt").onclick = ev => { ev.preventDefault(); showTab("tl"); const t = [...document.querySelectorAll(".turn-hd")].find(h => h.textContent.includes(r.title)); if (t) t.scrollIntoView({block:"start"}); };
+}
+async function runAttack(id){
+  if (atkBusy) return; atkBusy = true;
+  const box = document.querySelector(`#atk-${id} .res`);
+  box.innerHTML = `<span class="badge2 run">running… (watch it in Live trace)</span>`;
+  try { await stream(await fetch("/api/attack", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({id})})); }
+  catch { box.innerHTML = `<span class="badge2 fail">server error</span>`; }
+  atkBusy = false;
+}
+$("runAllAtk").onclick = async () => { for (const a of attacks) await runAttack(a.id); };
+loadAttacks();
+
+/* ================= Usage & cost ================= */
+let PRICES = {profiles:[]}, usageEv = null, usageScope = "turn", profileId = null;
+const curProfile = () => PRICES.profiles.find(p => p.id === profileId) || PRICES.profiles[0];
+const fmtS = ms => (ms / 1000).toFixed(ms < 10000 ? 2 : 1) + " s";
+function renderUsage(){
+  const t = usageEv ? usageEv[usageScope === "turn" ? "turn_totals" : "session_totals"] : null;
+  const p = curProfile();
+  const hero = (l, v, sub) => `<div><small>${l}</small><b>${v}</b><i>${sub || "&nbsp;"}</i></div>`;
+  const cell = (l, v, sub) => `<div><small>${l}</small><b>${v}</b>${sub ? `<i>${sub}</i>` : ""}</div>`;
+  const costTxt = t ? money(t.cost[p ? p.id : ""] || 0) : "$0.00";
+  if (!t){
+    $("uhero").innerHTML = hero("Time", "0 s", "total") + hero("Tokens", "0", "in + out") + hero("If hosted", "$0.00", "estimate");
+    $("ugrid").innerHTML = ""; $("ubar").innerHTML = ""; $("kpi").innerHTML = "";
+    return;
+  }
+  const tokTotal = t.prompt_tokens + t.output_tokens;
+  const speed = t.llm_ms ? (t.output_tokens / (t.llm_ms / 1000)).toFixed(1) : "—";
+  $("uhero").innerHTML =
+    hero("Time", fmtS(t.wall_ms), `≈ ${speed} tokens/s`) +
+    hero("Tokens", tokTotal.toLocaleString(), `${t.prompt_tokens.toLocaleString()} in · ${t.output_tokens.toLocaleString()} out`) +
+    hero("If hosted", costTxt, "estimate, placeholder prices");
+  $("ugrid").innerHTML =
+    cell("Model calls", t.llm_calls + t.embed_calls, `${t.llm_calls} LLM · ${t.embed_calls} embedding`) +
+    cell("Actual cost", "$0.00", "local models, free to run") +
+    cell("LLM time", fmtS(t.llm_ms), t.wall_ms ? Math.round(100 * t.llm_ms / t.wall_ms) + "% of total" : "") +
+    cell("RAG / embed", fmtS(t.embed_ms), t.wall_ms ? Math.round(100 * t.embed_ms / t.wall_ms) + "% of total" : "") +
+    cell("Code &amp; tools", t.other_ms + " ms", "rules, lookups") +
+    cell("Embedding tokens", t.embed_tokens, "for the policy search");
+  const tot = Math.max(1, t.wall_ms), pc = x => Math.max(0, 100 * x / tot);
+  $("ubar").innerHTML = `<span style="width:${pc(t.llm_ms)}%;background:var(--k-LLM)"></span><span style="width:${pc(t.embed_ms)}%;background:var(--k-RAG)"></span><span style="width:${pc(t.other_ms)}%;background:var(--k-TOOL)"></span>`;
+  $("kpi").innerHTML = `<div><small>Time</small><b>${fmtS(t.wall_ms)}</b></div><div><small>Tokens</small><b>${tokTotal.toLocaleString()}</b></div><div><small>Model calls</small><b>${t.llm_calls + t.embed_calls}</b></div><div><small>If hosted</small><b>${costTxt}</b></div>`;
+}
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+  usageScope = b.dataset.s; document.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x === b)); renderUsage();
+});
+async function loadUsageConfig(){
+  try {
+    PRICES = await (await fetch("/api/prices")).json();
+    profileId = (PRICES.profiles[0] || {}).id;
+    $("profile").innerHTML = PRICES.profiles.map(p => `<option value="${p.id}">${esc(p.label)}</option>`).join("");
+    $("profile").onchange = () => { profileId = $("profile").value; renderUsage(); };
+    const m = await (await fetch("/api/models")).json();
+    $("models").innerHTML = m.cards.map(c => c.error ? `<div class="mc"><b>${esc(c.name)}</b><span>${esc(c.error)}</span></div>` :
+      `<div class="mc"><b>${esc(c.name)}</b><span>${esc(c.role)}</span><span>${esc(c.parameters)} · ${esc(c.quantization)} · ctx ${(c.context_length/1000).toFixed(0)}k · ${(c.size_mb/1000).toFixed(1)} GB · ${c.local ? "runs locally" : ""}</span></div>`).join("");
+    $("cmpA").textContent = m.cards[0] ? m.cards[0].name : "the chat model";
+    $("cmpList").innerHTML = m.installed.map(n => `<option value="${esc(n)}">`).join("");
+  } catch {}
+  renderUsage();
+}
+loadUsageConfig();
+
+/* ================= Model comparison ================= */
+let cmp = {};
+function cmpEvent(e){
+  const out = $("cmpOut");
+  if (e.type === "compare_start"){ cmp = {}; out.innerHTML = `<div class="sumbar">Warming up and running ${e.scenarios} cases on each of ${e.models.map(esc).join(" and ")}…</div>`; return; }
+  if (e.type === "compare_error"){
+    out.innerHTML = `<div class="notice"><b>${esc(e.message)}</b>${e.fix ? `<br>Nothing was downloaded. To add it yourself, run this in a terminal, then try again:<pre class="cmd">${esc(e.fix)}</pre>` : ""}${e.installed && e.installed.length ? `Installed now: ${e.installed.map(esc).join(", ")}` : ""}</div>`; return;
+  }
+  if (e.type === "compare_row"){
+    let box = document.getElementById("cmp-" + e.model.replace(/\W/g, "_"));
+    if (!box){ box = document.createElement("div"); box.className = "cmpm"; box.id = "cmp-" + e.model.replace(/\W/g, "_"); box.innerHTML = `<h4>${esc(e.model)}</h4>`; out.appendChild(box); }
+    const r = document.createElement("div"); r.className = "erow " + (e.ok ? "pass" : "fail");
+    r.innerHTML = `<span class="st">${e.ok ? "✓" : "✗"}</span><span class="nm">${esc(e.name)}</span><span class="ex">${esc(e.ok ? e.actual : "expected " + e.expected + " · got " + e.actual)} · ${e.tokens} tok · ${(e.wall_ms/1000).toFixed(1)}s</span>`;
+    box.appendChild(r); return;
+  }
+  if (e.type === "compare_model_done"){ cmp[e.model] = e; return; }
+  if (e.type === "compare_done"){
+    const ms = Object.keys(cmp); if (ms.length < 2) return;
+    const p = curProfile(), c = k => cmp[k];
+    const row = (label, f) => `<tr><td>${label}</td>${ms.map(m => `<td class="num">${f(c(m))}</td>`).join("")}</tr>`;
+    out.insertAdjacentHTML("afterbegin", `<div class="lab">Side by side</div><table class="t"><tr><th></th>${ms.map(m => `<th>${esc(m)}</th>`).join("")}</tr>
+      ${row("Correct outcomes", x => `${x.passed}/${x.total}`)}
+      ${row("Warm-up (load)", x => fmtS(x.warm_ms))}
+      ${row("Total time (all cases)", x => fmtS(x.wall_ms))}
+      ${row("LLM calls", x => x.llm_calls)}
+      ${row("Tokens in → out", x => `${x.prompt_tokens.toLocaleString()} → ${x.output_tokens.toLocaleString()}`)}
+      ${row("Actual cost", () => "$0.00 (local)")}
+      ${row("Est. if hosted", x => money(x.cost[p ? p.id : ""] || 0))}
+    </table>`);
+  }
+}
+$("runCmp").onclick = async () => {
+  $("runCmp").disabled = true;
+  try { await stream(await fetch("/api/compare", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({model: $("cmpModel").value})})); }
+  catch { $("cmpOut").innerHTML = `<div class="notice">Could not reach the server.</div>`; }
+  $("runCmp").disabled = false;
+};
+
+/* ================= FAQ ================= */
+const FAQ_SVG = `<svg viewBox="0 0 1000 560" role="img" aria-label="Architecture diagram">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+<rect class="box" x="20" y="20" width="230" height="70" rx="12" style="stroke:var(--k-INPUT)"/><text class="t1" x="36" y="48">Browser</text><text class="t2" x="36" y="68">chat · live trace · usage · FAQ</text>
+<rect class="box" x="320" y="20" width="270" height="70" rx="12" style="stroke:var(--k-INPUT)"/><text class="t1" x="336" y="48">server.py</text><text class="t2" x="336" y="68">sessions · streams events as NDJSON</text>
+<path class="ar" d="M250,45 L320,45"/><path class="ar" d="M320,68 L250,68"/>
+<path class="ar" d="M455,90 L455,128"/>
+
+<rect class="grp" x="20" y="130" width="660" height="330" rx="14"/><text class="t1" x="36" y="154">agent.py · the orchestrator (owns all state, decides what happens next)</text>
+<rect class="box" x="38" y="170" width="200" height="66" rx="10" style="stroke:var(--k-LLM)"/><text class="t1" x="50" y="194">1 · Intent router</text><text class="t2" x="50" y="212">LLM reads it · code allow-list</text>
+<rect class="box" x="250" y="170" width="200" height="66" rx="10" style="stroke:var(--k-CODE)"/><text class="t1" x="262" y="194">2 · Extract details</text><text class="t2" x="262" y="212">LLM reads · code validates</text>
+<rect class="box" x="462" y="170" width="200" height="66" rx="10" style="stroke:var(--k-ROUTER)"/><text class="t1" x="474" y="194">3 · Dialog policy</text><text class="t2" x="474" y="212">code: what to ask next</text>
+<path class="ar" d="M238,203 L250,203"/><path class="ar" d="M450,203 L462,203"/>
+<rect class="box" x="38" y="262" width="200" height="66" rx="10" style="stroke:var(--k-LLM)"/><text class="t1" x="50" y="286">4 · Agent loop</text><text class="t2" x="50" y="304">LLM picks tools · max 8 steps</text>
+<rect class="box" x="250" y="262" width="200" height="66" rx="10" style="stroke:var(--k-DECISION);stroke-width:3"/><text class="t1" x="262" y="286">5 · Rules engine</text><text class="t2" x="262" y="304">CODE decides: refund · partial ·</text><text class="t2" x="262" y="318">replacement · deny · executive</text>
+<rect class="box" x="462" y="262" width="200" height="66" rx="10" style="stroke:var(--k-OUTPUT)"/><text class="t1" x="474" y="286">6 · Reply</text><text class="t2" x="474" y="304">fixed templates · guarded LLM wording</text>
+<path class="ar" d="M562,236 L562,250 L144,250 L144,262"/><path class="ar" d="M238,295 L250,295"/><path class="ar" d="M450,295 L462,295"/>
+<rect class="box" x="38" y="352" width="624" height="84" rx="10" style="stroke:var(--k-TOOL)"/><text class="t1" x="50" y="376">Tools · plain Python functions (no MCP)</text>
+<text class="t2" x="50" y="396">get_order · get_refund_history · check_carrier_scan · check_inventory</text>
+<text class="t2" x="50" y="414">search_policy (RAG) · propose_resolution (runs the rules engine)</text>
+<path class="ar" d="M144,328 L144,352"/>
+
+<rect class="grp" x="710" y="130" width="270" height="190" rx="14"/><text class="t1" x="726" y="154">Ollama · runs locally</text>
+<rect class="box" x="726" y="168" width="238" height="68" rx="10" style="stroke:var(--k-LLM)"/><text class="t1" x="738" y="192">qwen3:4b-instruct</text><text class="t2" x="738" y="210">4.0B · Q4_K_M · 2.5 GB</text><text class="t2" x="738" y="225">chat · routing · tools · wording</text>
+<rect class="box" x="726" y="248" width="238" height="56" rx="10" style="stroke:var(--k-RAG)"/><text class="t1" x="738" y="272">nomic-embed-text</text><text class="t2" x="738" y="290">137M · embeddings for RAG</text>
+<path class="ar" d="M680,215 L710,215"/><path class="ar" d="M710,235 L680,235"/>
+
+<rect class="grp" x="710" y="340" width="270" height="120" rx="14"/><text class="t1" x="726" y="364">Data files (shared_data/)</text>
+<text class="t2" x="726" y="386">orders.json · refund_history.json</text><text class="t2" x="726" y="404">inventory.json</text><text class="t2" x="726" y="422">refund_policy.md → split into 8 sections,</text><text class="t2" x="726" y="438">embedded once, searched by similarity</text>
+<path class="ar" d="M662,394 L710,394"/>
+
+<rect class="box" x="20" y="484" width="960" height="60" rx="12" style="stroke:var(--k-GUARDRAIL);stroke-dasharray:6 4"/><text class="t1" x="36" y="510">Tracer</text>
+<text class="t2" x="36" y="530">Every step above emits a trace event and a usage row (model, tokens, seconds). They stream to the Live trace and are kept in the audit log.</text>
+<path class="ar dash" d="M350,460 L350,484"/>
+</svg>`;
+
+const FAQ = [
+ {g:"How it's built", items:[
+  ["What is this agent, in one paragraph?", `<p>Worstbuy is a customer-support chatbot for refunds and replacements. A small local language model understands what the customer says, a retrieval step looks up the store's policy, and plain Python rules make every decision about money. The model never approves, denies or prices anything: it reads language, picks tools and phrases questions. Everything it does is shown live in the trace.</p>`],
+  ["Which models does it use, and why two?", `<table><tr><th>Model</th><th>Size</th><th>Job</th></tr>
+   <tr><td><code>qwen3:4b-instruct</code></td><td>4.0B parameters · Q4_K_M · about 2.5 GB</td><td>The "LLM": intent routing, extracting details, classifying the claim, choosing tools (tool calling) and phrasing replies.</td></tr>
+   <tr><td><code>nomic-embed-text</code></td><td>137M · F16 · about 0.3 GB</td><td>Turns text into vectors so the policy can be searched by meaning (RAG). It does not generate text.</td></tr></table>
+   <p>Both run on your own machine through <b>Ollama</b>, so there is no API key and no per-token bill. Two models because generating text and measuring text similarity are different jobs: a small dedicated embedding model is faster and better at search than a chat model.</p>`],
+  ["What does the LLM do, and what does plain code do?", `<table><tr><th>The LLM (flexible, can be wrong)</th><th>Code (exact, testable)</th></tr>
+   <tr><td>Understands messy wording ("Hey, my tshirt is torn")<br>Extracts the order ID and the reason<br>Labels the claim type<br>Chooses which tool to call next<br>Phrases a friendly question</td><td>Checks everything the LLM says against the customer's actual words<br>Looks up orders, history, stock<br>Applies the refund rules and thresholds<br>Validates the customer's choice<br>Writes the final approval, denial and handoff messages</td></tr></table>
+   <p class="faq-note">Rule of thumb used throughout: <b>the model interprets, code decides.</b></p>`],
+  ["How does one message travel through the system?", `<ol><li><b>Input</b>: the browser posts the message to <code>server.py</code>, which starts a turn and streams events back.</li>
+   <li><b>Intent router</b> (LLM + code): refund, replacement, support, unsupported, or small talk. Answers like "ORD-48213" skip the LLM and stay in the current flow.</li>
+   <li><b>Extract details</b> (LLM + code): order ID and reason; code verifies both appear in the customer's text.</li>
+   <li><b>Classify the claim</b> (LLM + allow-list): damaged, missing, wrong item, change of mind, or other.</li>
+   <li><b>Dialog policy</b> (code): if something is missing, ask for it. Otherwise run the decision.</li>
+   <li><b>Agent loop</b> (LLM picks tools, code runs them): verify order, search policy (RAG), check history, carrier and stock, then call <code>propose_resolution</code>.</li>
+   <li><b>Rules engine</b> (code): produces the outcome.</li>
+   <li><b>Reply</b>: mostly fixed templates built from the outcome.</li></ol>`],
+  ["What is RAG here, and when is it used?", `<p>RAG (retrieval-augmented generation) means: before the model answers, look up the relevant text and hand it to the model. Here, during the agent loop the model calls the <code>search_policy</code> tool. The code embeds the query with <code>nomic-embed-text</code>, compares it to the 8 policy sections by cosine similarity, and returns the best 2. You can see this as the pink <span class="k" style="--c:var(--k-RAG)">RAG</span> step with similarity bars.</p>
+   <p class="faq-note"><b>Honest limit:</b> today the retrieved text informs the model, but the refund rules are also written in Python, so the decision would be the same without retrieval. RAG would drive answers directly in a "policy Q&amp;A" feature, which is not built yet.</p>`],
+  ["What are tools and tool calling?", `<p>Tools are ordinary Python functions the model is allowed to request: <code>get_order</code>, <code>get_refund_history</code>, <code>check_carrier_scan</code>, <code>check_inventory</code>, <code>search_policy</code> and <code>propose_resolution</code>. With native tool calling the model replies "call get_order with this ID" instead of text. The orchestrator runs the function, returns the result, and the model picks the next step. Tools are not MCP servers here: they are called in the same process.</p>`],
+  ["What are the guardrails?", `<ul><li><b>Validation</b>: nothing the LLM extracts is trusted unless it appears in the customer's text or an allow-list.</li>
+   <li><b>Identity rebinding</b>: if the model invents a customer ID, it is replaced with the one from the verified order.</li>
+   <li><b>Action gate</b>: arguments of the decision tool always come from verified state, never from model text.</li>
+   <li><b>Sequencing gate</b>: policy, history and stock must be checked first; if the model skipped one, the code runs it.</li>
+   <li><b>Stop rule</b>: at most 8 agent steps, then hand off to a human.</li>
+   <li><b>Reply guard</b>: blocks model wording that refuses, promises timelines or asks for things nobody asked for.</li>
+   <li><b>Choice validation</b>: a customer can only pick an option the rules offered.</li>
+   <li><b>Tone and stuck handling</b>: abuse gets one boundary then a handoff; asking the same question 3 times hands off.</li></ul>`],
+  ["How is a refund decision made?", `<p>The rules engine checks, top to bottom, and the first rule that fires decides:</p>
+   <ol><li>Order verified, and policy, history and stock checked.</li><li>Claim contradicts the order record (for example "damaged" on an order still in transit) → <b>executive</b>.</li>
+   <li>Parcel "missing" but the carrier says delivered → <b>executive</b>.</li><li>More than 30 days since delivery → <b>denied</b>. Change of mind or "does not fit" → <b>denied</b>.</li>
+   <li>Ambiguous reason → <b>executive</b>. Order over $200 or over $75 → <b>executive</b>.</li><li>Damaged or wrong item without a photo → <b>ask for a photo</b>.</li>
+   <li>3 or more refunds in 12 months → <b>executive</b>.</li>
+   <li>Otherwise eligible: <b>full refund</b> within 14 days, <b>50% partial refund</b> at 15 to 30 days, plus a <b>replacement</b> if the claim type allows it and the item is in stock. The customer chooses.</li></ol>
+   <p>Nobody is asked "how much do you want?": the entitlement comes from the order data and the rules.</p>`],
+  ["Why not just let the LLM decide?", `<p>A 4B model is good at language and inconsistent at consistent business decisions. It can be talked into things ("ignore your rules"). Keeping decisions in code means they are repeatable, testable (see the Tests tab) and auditable. The attack demos prove it: the model can be fooled, the rules cannot.</p>`],
+  ["How does this relate to the workshop stages 1–6?", `<table><tr><th>Stage</th><th>Idea</th><th>Where it shows up here</th></tr>
+   <tr><td>1 LLM only</td><td>Plausible is not grounded</td><td>Why the model never decides</td></tr><tr><td>2 Tools</td><td>Trusted systems of record</td><td>Order, history, carrier, stock lookups</td></tr>
+   <tr><td>3 RAG</td><td>Semantic policy retrieval</td><td><code>search_policy</code></td></tr><tr><td>4 Guardrails</td><td>LLM interprets, code decides</td><td>Classifier + rules engine</td></tr>
+   <tr><td>5 Agent loop</td><td>Supervised tool use</td><td>Action gate, sequencing gate, stop rule</td></tr><tr><td>6 Evals</td><td>Test the hard layer</td><td>The Tests tab</td></tr></table>`],
+  ["What data does it use?", `<p>Four files in <code>shared_data/</code>: <code>orders.json</code> (4 demo orders), <code>refund_history.json</code>, <code>inventory.json</code> and <code>refund_policy.md</code> (the text the RAG step searches). It is all fake demo data; nothing real is read or moved.</p>`],
+  ["What if the customer is angry or doesn't know their order ID?", `<p>Code watches for both. Frustration gets one apology and an early offer of an executive; swearing gets one calm boundary, then a handoff on the second time. If the bot asks for the same detail 3 times, it explains where to find an order ID on the second ask and hands off on the third.</p>`],
+ ]},
+ {g:"Reading the tracer", items:[
+  ["What do the coloured step types mean?", `<table><tr><th>Step</th><th>Meaning</th></tr>
+   <tr><td><span class="k" style="--c:var(--k-INPUT)">INPUT</span></td><td>A customer message or photo arrived.</td></tr>
+   <tr><td><span class="k" style="--c:var(--k-ROUTER)">ROUTING</span></td><td>Code deciding the next move (intent, flow, what to ask).</td></tr>
+   <tr><td><span class="k" style="--c:var(--k-LLM)">LLM</span></td><td>A call to the language model.</td></tr>
+   <tr><td><span class="k" style="--c:var(--k-CODE)">CODE CHECK</span></td><td>Code validating what the LLM returned.</td></tr>
+   <tr><td><span class="k" style="--c:var(--k-RAG)">RAG</span></td><td>Embedding search over the policy.</td></tr>
+   <tr><td><span class="k" style="--c:var(--k-TOOL)">TOOL</span></td><td>A lookup in a trusted data file.</td></tr>
+   <tr><td><span class="k" style="--c:var(--k-GUARDRAIL)">GUARDRAIL</span></td><td>A control that caught or corrected something.</td></tr>
+   <tr><td><span class="k" style="--c:var(--k-DECISION)">DECISION</span></td><td>The rules engine ruling, with every rule shown.</td></tr>
+   <tr><td><span class="k" style="--c:var(--k-OUTPUT)">OUTPUT</span></td><td>The reply sent to the customer and how its wording was produced.</td></tr></table>
+   <p>Click any step to expand it. The small grey line under a step shows the file and function that ran.</p>`],
+  ["What do the usage numbers mean?", `<ul><li><b>Tokens</b>: pieces of text the model reads (in) and writes (out). Roughly 3 to 4 characters each.</li>
+   <li><b>Time</b>: wall-clock seconds. Inside each call it splits into model <i>load</i>, <i>prompt processing</i> and <i>generation</i>; the first call after idle is slow because of load.</li>
+   <li><b>Speed</b>: generated tokens per second.</li>
+   <li><b>LLM vs RAG vs code</b>: the coloured bar. Code and tools take a few milliseconds; the model takes nearly all the time.</li></ul>`],
+  ["What do \"Actual $0.00\" and \"If hosted\" mean?", `<p><b>Actual $0.00</b>: the models run on your own computer, so no one bills you per token (you only spend electricity and time).</p>
+   <p><b>If hosted</b>: what the same tokens would cost on a paid hosted model: tokens × price per million tokens. For example a 196-token prompt with a 19-token answer is a fraction of a cent. It is an <b>estimate from placeholder prices</b> in <code>worstbuy/prices.json</code>, not real vendor prices. Edit that file before quoting any number.</p>`],
+  ["Why does one reply take 30 to 60 seconds?", `<p>A refund decision makes about 9 separate model calls (router, extractor, classifier, then one per agent step), each a few seconds on a 4B model running on a laptop. Everything else, including the rules, takes milliseconds. A hosted fast model would cut the time a lot, which is a good lesson for the trade-off between cost, speed and privacy.</p>`],
+  ["What does the Tests tab prove?", `<ul><li><b>Evals</b>: the rules still give the expected outcome for dozens of cases, tone and usage maths are right, and the router labels messages correctly.</li>
+   <li><b>Attack demos</b>: prompt injection, fake system messages, lying about photos and similar attempts are all stopped, and each result names the control that stopped it.</li>
+   <li><b>Model comparison</b>: the same cases on a second model, showing accuracy, time and tokens (it needs that model installed).</li></ul>`],
+  ["What is in the audit log export?", `<p>A JSON file with the whole chat: every trace step, state snapshot and message, the per-call usage ledger and totals, which models and prompts were used, and short hashes of the policy and data files. In this demo it lives in memory only.</p>`],
+ ]},
+ {g:"Running, sharing and hosting", items:[
+  ["How do I run it on my machine?", `<ol><li>Install <b>Ollama</b> and start it.</li><li>Download the two models: <code>ollama pull qwen3:4b-instruct</code> and <code>ollama pull nomic-embed-text</code> (about 2.8 GB in total).</li>
+   <li>Create a Python 3.10+ environment and install <code>requirements.txt</code>.</li><li>Run <code>python worstbuy/server.py</code> and open <code>http://127.0.0.1:8000</code>.</li></ol><p><code>worstbuy/README.md</code> has the exact commands, and <code>worstbuy/run.sh</code> does them in one go.</p>`],
+  ["I'm pushing this to Git for the team. What will teammates need?", `<p>Python 3.10+, Ollama, about 3 GB of free disk space for the models, and enough memory to run a 4B model. They run everything on their own machine, so it costs you nothing and keeps all data local. Do not commit the <code>.venv</code> folder; a <code>.gitignore</code> is included.</p>`],
+  ["If I share the link or the repo, will I be charged?", `<table><tr><th>Setup</th><th>Who pays</th></tr>
+   <tr><td>Teammates clone it and run it locally</td><td><b>Nobody.</b> They use their own computers.</td></tr>
+   <tr><td>You run it and screen-share</td><td><b>Nobody.</b></td></tr>
+   <tr><td>You host it with a hosted model API</td><td><b>You</b>: the API key belongs to your account, so every visitor's tokens are billed to it, plus any hosting fees. Needs a login, rate limits and a spend cap.</td></tr></table>`],
+  ["Can I put it on Vercel as it is?", `<p class="faq-note">Not as built. The server calls Ollama on the same machine, and Vercel's serverless functions cannot run a 2.5 GB model. A deployed page would load but could not answer.</p>
+   <p>To host it you would need to: (1) swap the model calls for a hosted API such as an LLM provider or Vercel's AI Gateway, (2) make the server stateless, because chat sessions and the audit log are held in memory today, (3) add authentication, rate limits and a spend cap, and (4) re-check turn lengths against function time limits. Check Vercel's current pricing and plan terms for hosting charges; they are separate from the model charges.</p>`],
+  ["Where is MCP in all this?", `<p>Not used. The tools are plain Python functions called in the same process. The same tools could be exposed through an MCP server without changing the guardrails; that would make them reusable by other agents.</p>`],
+  ["Is it production-ready?", `<p class="faq-note">No: it is a teaching simulation.</p><ul><li>No real refunds or shipments; all data is fake.</li><li>No login; sessions and logs are in memory.</li><li>A 4B model can mis-label a claim. The safe failure is a handoff to an executive, and the Tests tab measures it.</li><li>Prices on screen are placeholders.</li><li>A real deployment also needs idempotent write APIs, secrets management, rate and latency controls, PII handling, a durable audit trail and a real human-review queue.</li></ul>`],
+ ]},
+];
+
+function buildFaq(){
+  const page = $("faqPage");
+  if (page.dataset.built) return; page.dataset.built = "1";
+  page.innerHTML = `<h1>FAQ</h1><p class="lead">How this agent is built, how to read the live trace, and how to run and share it.</p>
+    <input class="faq-search" id="faqSearch" type="search" placeholder="Search the FAQ… (try “RAG”, “cost”, “Vercel”)" aria-label="Search FAQ">
+    <div class="faq-grp">How it is wired</div><div class="faq-diagram">${FAQ_SVG}</div>
+    <div id="faqList">${FAQ.map(g => `<div class="faq-grp" data-g>${esc(g.g)}</div>` + g.items.map(([q, a]) => `<details class="q"><summary>${esc(q)}</summary><div class="a">${a}</div></details>`).join("")).join("")}</div>
+    <div class="faq-none" id="faqNone" hidden>No matching questions.</div>`;
+  $("faqSearch").oninput = () => {
+    const term = $("faqSearch").value.trim().toLowerCase(); let shown = 0;
+    document.querySelectorAll("#faqList details.q").forEach(d => { const m = !term || d.textContent.toLowerCase().includes(term); d.style.display = m ? "" : "none"; if (m && term) d.open = true; if (m) shown++; });
+    document.querySelectorAll("#faqList [data-g]").forEach(g => { let n = g.nextElementSibling, any = false; while (n && !n.hasAttribute("data-g")) { if (n.style.display !== "none") any = true; n = n.nextElementSibling; } g.style.display = any ? "" : "none"; });
+    $("faqNone").hidden = shown > 0;
+  };
+}
+
+function handle(e){
+  if (e.type === "trace"){ trace(e); return; }
+  if (e.type === "eval_start" || e.type === "eval" || e.type === "eval_done"){ evalEvent(e); return; }
+  if (e.type === "attack_result"){ attackResult(e); return; }
+  if (e.type === "usage"){ usageEv = e; renderUsage(); return; }
+  if (e.type.startsWith("compare_")){ cmpEvent(e); return; }
+  if (e.type === "state"){ setState(e.state); return; }
+  if (e.type === "status"){ hideTyping(); setStatus(e.text); return; }
+  if (e.type === "assistant"){ hideTyping(); clearStatus(); bot(e.text); return; }
+  if (e.type !== "ui") return;
+  switch (e.action){
+    case "show_menu": menu(); break;
+    case "request_photo": photoMode(true); el(`<button class="btn" type="button">📎 Upload photo</button>`).querySelector("button").onclick = () => $("file").click(); break;
+    case "blocked": break;
+    case "approved": {
+      photoMode(false);
+      const s = e.summary;
+      if (s.kind === "replacement")
+        el(`<h4>✓ Replacement approved</h4><p>Order ${esc(s.order_id)} · ${esc(s.item)}</p><p><b>New ${esc(s.item)}</b> will be sent</p><div class="sim">Demo only — nothing is shipped.</div>`, "card");
+      else
+        el(`<h4>✓ Refund approved</h4><p>Order ${esc(s.order_id)} · ${esc(s.item)}</p><p><b>$${Number(s.amount).toFixed(2)}</b> ${s.percent && s.percent < 100 ? s.percent + "% partial refund" : "full refund"}</p><div class="sim">Demo only — no real money moved.</div>`, "card");
+      done("Chat ended"); break;
+    }
+    case "choose_resolution": {
+      const q = el("", "quick");
+      e.options.forEach(o => {
+        const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.style.marginLeft = "0"; b.textContent = o.label;
+        b.onclick = () => { q.remove(); send(o.say); }; q.appendChild(b);
+      });
+      break;
+    }
+    case "offer_refund": {
+      const q = el("", "quick");
+      [["Yes, refund me", "Yes please, refund me"], ["No thanks", "No thanks"]].forEach(([label, say]) => {
+        const b = document.createElement("button"); b.type = "button"; b.className = "btn sec"; b.style.marginLeft = "0"; b.textContent = label;
+        b.onclick = () => { q.remove(); send(say); }; q.appendChild(b);
+      });
+      break;
+    }
+    case "offer_executive": {
+      const q = el("", "quick");
+      [["Connect me to an executive", "I want to talk to a person"], ["Let's keep going", null]].forEach(([label, say]) => {
+        const b = document.createElement("button"); b.type = "button"; b.className = "btn sec"; b.style.marginLeft = "0"; b.textContent = label;
+        b.onclick = () => { q.remove(); if (say) send(say); else input.focus(); }; q.appendChild(b);
+      });
+      break;
+    }
+    case "connect_executive":
+      photoMode(false);
+      el(`🧑‍💼 Connecting you to an executive…`, "exec");
+      if (e.summary) caseCard(e.summary);
+      done("Waiting for an executive"); break;
+    case "closed": done("Chat ended"); break;
+  }
+}
+
+function done(ph){
+  lock(true, ph);
+  const b = el(`Start a new chat`, "btn sec"); b.setAttribute("role", "button"); b.tabIndex = 0;
+  b.onclick = start;
+}
+
+async function stream(res){
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "";
+  for (;;){
+    const {done, value} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, {stream:true});
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0){
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (line) handle(JSON.parse(line));
+    }
+  }
+}
+
+async function run(fn){
+  busy = true; lock(true); showTyping();
+  try { await stream(await fn()); }
+  catch { hideTyping(); clearStatus(); bot("Sorry, I couldn't reach support just now. Please try again."); }
+  hideTyping(); clearStatus();
+  busy = false;
+  if (!document.querySelector(".btn.sec")) { lock(false, "Type a message…"); input.focus(); }
+}
+
+function send(text){
+  text = text.trim();
+  if (!text || busy) return;
+  me(text); input.value = "";
+  return run(() => fetch("/api/message", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({session, text})}));
+}
+
+form.onsubmit = e => { e.preventDefault(); send(input.value); };
+$("clip").onclick = () => $("file").click();
+$("file").onchange = () => {
+  const f = $("file").files[0]; $("file").value = "";
+  if (!f || busy) return;
+  if (!f.type.startsWith("image/")) { bot("Please upload an image file (JPG or PNG)."); return; }
+  me("📷 " + f.name); photoMode(false);
+  run(() => fetch("/api/photo", {method:"POST", headers:{"X-Session":session, "Content-Type":f.type}, body:f}));
+};
+
+async function start(){
+  usageEv = null; renderUsage(); resetInspector(); log.innerHTML = ""; lock(false, "Type a message… (try “Hi”)"); photoMode(false);
+  session = (await (await fetch("/api/session", {method:"POST"})).json()).session;
+  bot("Welcome to Worstbuy! Say “Hi” to get started.");
+  input.focus();
+}
+start();
+</script>
+</body>
+</html>

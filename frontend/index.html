@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refund Agent</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#fff; --text:#1c2230; --muted:#667085; --line:#e3e6ec;
+    --accent:#3b5bdb; --ok:#1f8a4c; --warn:#b7791f; --bad:#c53030; --info:#2b6cb0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171f; --card:#1d212c; --text:#e8ebf2; --muted:#98a2b3; --line:#2c3242; --accent:#7c93ff; --ok:#4cc380; --warn:#e0a84a; --bad:#f07070; --info:#63b3ed; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 -apple-system,system-ui,sans-serif; }
+  main { max-width:1000px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; font-size:13px; }
+  .grid { display:grid; grid-template-columns:320px 1fr; gap:16px; align-items:start; }
+  @media (max-width:760px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
+  label:first-child { margin-top:0; }
+  input[type=text], input[type=number], select, textarea {
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+    background:var(--bg); color:var(--text); font:inherit;
+  }
+  textarea { resize:vertical; min-height:60px; }
+  .check { display:flex; gap:8px; align-items:center; margin-top:12px; font-size:14px; }
+  .check input { margin:0; }
+  button { margin-top:16px; width:100%; padding:10px; border:0; border-radius:6px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .order-info { font-size:12px; color:var(--muted); margin-top:6px; }
+  .presets { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .presets button { margin:0; width:auto; padding:4px 10px; font-size:12px; font-weight:500; background:var(--bg); color:var(--text); border:1px solid var(--line); }
+  #timeline { display:flex; flex-direction:column; gap:10px; }
+  .empty { color:var(--muted); text-align:center; padding:40px 0; }
+  .ev { border:1px solid var(--line); border-left-width:4px; border-radius:8px; padding:10px 12px; background:var(--card); }
+  .ev .t { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); }
+  .ev pre { margin:6px 0 0; font:12px/1.45 ui-monospace,Menlo,monospace; white-space:pre-wrap; word-break:break-word; color:var(--text); }
+  .ev.call { border-left-color:var(--accent); }
+  .ev.obs { border-left-color:var(--info); }
+  .ev.guard { border-left-color:var(--warn); }
+  .ev.guard .t { color:var(--warn); }
+  .ev.error, .ev.stop { border-left-color:var(--bad); }
+  .ev.final { border-left-color:var(--ok); }
+  .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:13px; font-weight:700; color:#fff; }
+  .AUTO_APPROVE { background:var(--ok); } .HUMAN_REVIEW { background:var(--warn); }
+  .NEEDS_INFORMATION { background:var(--info); } .BLOCKED { background:var(--bad); }
+  .answer { margin:8px 0; white-space:pre-wrap; }
+  .sim { font-size:12px; color:var(--warn); margin-top:6px; }
+  .thinking { color:var(--muted); font-size:13px; padding:4px 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Refund Agent</h1>
+  <p class="sub">Guarded agent loop · qwen3:4b-instruct via Ollama · simulation only, no real refunds</p>
+  <div class="grid">
+    <form class="card" id="form">
+      <div class="presets" id="presets"></div>
+      <label for="order">Order</label>
+      <select id="order"></select>
+      <div class="order-info" id="orderInfo"></div>
+      <label for="reason">Customer reason</label>
+      <textarea id="reason">The jug arrived cracked</textarea>
+      <label for="amount">Requested refund ($)</label>
+      <input type="number" id="amount" step="0.01" min="0" value="49">
+      <div class="check"><input type="checkbox" id="photo" checked><label for="photo" style="margin:0;font-size:14px;color:inherit">Photo supplied</label></div>
+      <button id="go" type="submit">Run agent</button>
+    </form>
+    <section class="card">
+      <div id="timeline"><div class="empty">Run the agent to see each tool call, guardrail and the controlled outcome.</div></div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const PRESETS = [
+  {label:"Cracked jug + photo", order:"ORD-48213", reason:"The jug arrived cracked", amount:49, photo:true},
+  {label:"Cracked, no photo", order:"ORD-48213", reason:"The jug arrived cracked", amount:49, photo:false},
+  {label:"$129 headphones", order:"ORD-48214", reason:"Headphones are defective", amount:129, photo:true},
+  {label:"Over order value", order:"ORD-48216", reason:"Parcel never arrived", amount:80, photo:false},
+  {label:"Lost T-shirt", order:"ORD-48216", reason:"My parcel never arrived", amount:35, photo:false},
+];
+let orders = [];
+
+function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+const j = o => esc(typeof o === "string" ? o : JSON.stringify(o, null, 2));
+
+function showOrder(){
+  const o = orders.find(x => x.order_id === $("order").value);
+  $("orderInfo").textContent = o ? `${o.item} · paid $${o.amount_paid} · ${o.status} · ${o.carrier_status}` : "";
+}
+
+async function init(){
+  orders = await (await fetch("/api/orders")).json();
+  $("order").innerHTML = orders.map(o => `<option>${o.order_id}</option>`).join("");
+  $("order").onchange = showOrder; showOrder();
+  PRESETS.forEach(p => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = p.label;
+    b.onclick = () => { $("order").value = p.order; $("reason").value = p.reason; $("amount").value = p.amount; $("photo").checked = p.photo; showOrder(); };
+    $("presets").appendChild(b);
+  });
+}
+
+function render(e){
+  const d = document.createElement("div");
+  if (e.type === "tool_call") {
+    d.className = "ev call";
+    d.innerHTML = `<div class="t">Step ${e.step} · model requests ${esc(e.name)}</div><pre>${j(e.args)}</pre>`;
+  } else if (e.type === "observation") {
+    d.className = "ev obs";
+    d.innerHTML = `<div class="t">Observation · ${esc(e.name)}</div><pre>${j(e.output)}</pre>`;
+  } else if (e.type === "guardrail") {
+    d.className = "ev guard";
+    let extra = e.model_args ? `<pre>model: ${j(e.model_args)}\nsafe:  ${j(e.safe_args)}</pre>` : "";
+    d.innerHTML = `<div class="t">⚠ ${esc(e.title)}</div><div>${esc(e.detail)}</div>${extra}`;
+  } else if (e.type === "final") {
+    d.className = "ev final";
+    d.innerHTML = `<div class="t">Controlled outcome</div>
+      <p><span class="badge ${esc(e.outcome.decision)}">${esc(e.outcome.decision)}</span></p>
+      <div class="answer">${esc(e.answer || "")}</div><pre>${j(e.outcome)}</pre>
+      ${e.simulation_notice ? '<div class="sim">Simulation: the claim passed the controlled checks, but no real refund was processed.</div>' : ""}`;
+  } else {
+    d.className = "ev " + e.type;
+    d.innerHTML = `<div class="t">${e.type === "stop" ? "Stop rule" : "Error"}</div><div>${esc(e.detail)}</div>`;
+  }
+  $("timeline").appendChild(d);
+  d.scrollIntoView({block:"nearest"});
+}
+
+$("form").onsubmit = async ev => {
+  ev.preventDefault();
+  $("go").disabled = true; $("go").textContent = "Running…";
+  $("timeline").innerHTML = '<div class="thinking" id="think">Agent is working…</div>';
+  try {
+    const res = await fetch("/api/run", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({order_id:$("order").value, reason:$("reason").value, requested:$("amount").value, photo:$("photo").checked}),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream:true});
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (line) { const t = $("think"); if (t) t.remove(); render(JSON.parse(line)); }
+      }
+    }
+  } catch (err) {
+    render({type:"error", detail:String(err)});
+  }
+  const t = $("think"); if (t) t.remove();
+  $("go").disabled = false; $("go").textContent = "Run agent";
+};
+init();
+</script>
+</body>
+</html>
