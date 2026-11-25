@@ -1,0 +1,9 @@
+{
+  "_note": "PLACEHOLDER PRICES for training demos only. These are NOT real vendor prices. Edit them to the numbers you want to present. Units: USD per 1,000,000 tokens.",
+  "currency": "USD",
+  "profiles": [
+    {"id": "hosted_small", "label": "Hosted small model (placeholder)", "input_per_mtok": 0.25, "output_per_mtok": 1.25, "embed_per_mtok": 0.02},
+    {"id": "hosted_large", "label": "Hosted large model (placeholder)", "input_per_mtok": 3.00, "output_per_mtok": 15.00, "embed_per_mtok": 0.13}
+  ],
+  "local": {"label": "Local (Ollama on this machine)", "input_per_mtok": 0, "output_per_mtok": 0, "embed_per_mtok": 0}
+}
